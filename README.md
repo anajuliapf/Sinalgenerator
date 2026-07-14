@@ -1,2 +1,0 @@
-# Sinalgenerator
-Gerador de QRcodes
