@@ -341,31 +341,53 @@
   .dynamic-fields.show { display: block; }
 
   .code-banner {
-    background: var(--ink);
-    color: var(--paper);
-    padding: 16px;
+    background: var(--amber);
+    color: var(--ink);
+    padding: 18px;
     border-radius: var(--radius);
     margin-top: 16px;
+    border: 2px solid var(--ink);
   }
-  .code-banner .cb-label {
+  .code-banner .cb-alert {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .code-banner .cb-link-label {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .code-banner .cb-link-box {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--ink);
+    border-radius: var(--radius);
+    background: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink);
+    word-break: break-all;
+    cursor: text;
+  }
+  .code-banner .cb-hint {
+    font-size: 11px;
+    color: var(--ink);
+    opacity: 0.75;
+    margin-top: 6px;
+    margin-bottom: 14px;
+  }
+  .code-banner .cb-footer {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--amber-soft);
-    margin-bottom: 4px;
-  }
-  .code-banner .cb-code {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 20px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-  }
-  .code-banner .cb-warn {
-    font-size: 11px;
-    color: #d9d5c8;
-    margin-top: 8px;
-    line-height: 1.5;
+    color: var(--ink);
+    opacity: 0.65;
+    margin-top: 12px;
+    border-top: 1px solid rgba(20,23,43,0.2);
+    padding-top: 10px;
   }
 
   /* Seção de edição */
@@ -543,6 +565,10 @@
         <div class="field">
           <label for="editDestino">Novo destino</label>
           <input type="text" id="editDestino" placeholder="Cole o novo link completo" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="editLabel">Nova etiqueta (opcional)</label>
+          <input type="text" id="editLabel" placeholder="Deixe em branco pra manter a etiqueta atual" autocomplete="off">
         </div>
         <button class="primary" id="editBtn">Atualizar destino</button>
         <div class="edit-status" id="editStatus"></div>
@@ -780,13 +806,16 @@ function renderHistory() {
   [...list].reverse().forEach(item => {
     const el = document.createElement('div');
     el.className = 'history-item';
+    const dateLine = item.updatedAt
+      ? `${formatDate(item.createdAt)}<br><span style="color:var(--amber)">editado ${formatDate(item.updatedAt)}</span>`
+      : formatDate(item.createdAt);
     el.innerHTML = `
       <img src="${item.thumb}" alt="QR">
       <div class="history-text">
         <div class="label"><span class="type-badge">${item.typeLabel || 'Link'}</span>${item.label || 'Sem etiqueta'}</div>
         <div class="url">${item.display}</div>
       </div>
-      <div class="history-date">${formatDate(item.createdAt)}</div>
+      <div class="history-date">${dateLine}</div>
       <button class="history-del" data-id="${item.id}" title="Remover">✕</button>
     `;
     container.appendChild(el);
@@ -853,7 +882,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
       qrText = `${window.location.origin}/r/${dynamicCode}`;
       dynamicEditLink = `${window.location.origin}${window.location.pathname}?edit_code=${dynamicCode}&edit_token=${data.editToken}`;
     } catch (e) {
-      alert('Erro de conexão ao criar o QR dinâmico. Isso só funciona depois de publicado no Netlify (não funciona abrindo o arquivo local).');
+      alert('Erro de conexão ao criar o QR dinâmico. Confira se o banco de dados (Upstash) está conectado ao projeto no Vercel.');
       genBtn.disabled = false;
       genBtn.textContent = 'Gerar QR code';
       return;
@@ -885,12 +914,17 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     const banner = document.createElement('div');
     banner.className = 'code-banner';
     banner.innerHTML = `
-      <div class="cb-label">Código deste QR</div>
-      <div class="cb-code">${dynamicCode}</div>
-      <div class="cb-warn">Guarde o link secreto de edição abaixo — sem ele, ninguém (nem você) consegue trocar o destino depois.</div>
-      <button class="secondary" id="copyEditLinkBtn" style="margin-top:12px;width:100%;background:#fff">Copiar link secreto de edição</button>
+      <div class="cb-alert">⚠ Guarde isto agora — só aparece uma vez</div>
+      <div class="cb-link-label">Seu link secreto de edição:</div>
+      <input type="text" class="cb-link-box" id="editLinkDisplay" value="${dynamicEditLink}" readonly>
+      <div class="cb-hint">Clique no campo acima pra selecionar tudo, ou use o botão abaixo. Sem esse link, ninguém — nem você — consegue trocar o destino depois.</div>
+      <button class="secondary" id="copyEditLinkBtn" style="width:100%;background:#fff">Copiar link secreto de edição</button>
+      <div class="cb-footer">Código público deste QR (não precisa guardar, só referência): ${dynamicCode}</div>
     `;
     document.querySelector('.scan-panel').appendChild(banner);
+
+    const linkDisplay = document.getElementById('editLinkDisplay');
+    linkDisplay.addEventListener('click', () => linkDisplay.select());
 
     document.getElementById('copyEditLinkBtn').addEventListener('click', async () => {
       try {
@@ -899,7 +933,9 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         const original = b.textContent;
         b.textContent = 'Copiado ✓';
         setTimeout(() => { b.textContent = original; }, 1500);
-      } catch (e) { console.error('Falha ao copiar', e); }
+      } catch (e) {
+        linkDisplay.select();
+      }
     });
   }
 
@@ -1006,14 +1042,40 @@ document.getElementById('copyBtn').addEventListener('click', async () => {
   } catch (e) { console.error('Falha ao copiar', e); }
 });
 
+function syncHistoryAfterEdit(code, newDestino, newLabel, updatedAt) {
+  const list = loadHistory();
+  const item = list.find(i => i.dynamicCode === code);
+  if (!item) return; // QR editado não foi gerado neste navegador — nada pra sincronizar aqui, tudo bem
+  item.display = newDestino;
+  if (newLabel) item.label = newLabel;
+  item.updatedAt = updatedAt;
+  saveHistory(list);
+  renderHistory();
+}
+
 renderHistory();
 
 /* ---------- Edição de QR dinâmico existente ---------- */
 const editCodeInput = document.getElementById('editCode');
 const editTokenInput = document.getElementById('editToken');
 const editLinkPaste = document.getElementById('editLinkPaste');
+const editDestinoInput = document.getElementById('editDestino');
+const editLabelInput = document.getElementById('editLabel');
 const editCurrent = document.getElementById('editCurrent');
 const editStatus = document.getElementById('editStatus');
+
+async function prefillFromLookup(code) {
+  if (!code) return;
+  try {
+    const resp = await fetch(`/api/lookup?code=${encodeURIComponent(code)}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    editDestinoInput.value = data.destino || '';
+    editLabelInput.value = data.label || '';
+    editCurrent.textContent = `Atual: ${data.label ? data.label + ' — ' : ''}${data.destino}`;
+    editCurrent.classList.add('show');
+  } catch {}
+}
 
 function tryFillFromLink(text) {
   try {
@@ -1023,6 +1085,7 @@ function tryFillFromLink(text) {
     if (code && token) {
       editCodeInput.value = code;
       editTokenInput.value = token;
+      prefillFromLookup(code);
       return true;
     }
   } catch {}
@@ -1033,9 +1096,14 @@ editLinkPaste.addEventListener('input', () => {
   tryFillFromLink(editLinkPaste.value);
 });
 
+editCodeInput.addEventListener('blur', () => {
+  prefillFromLookup(editCodeInput.value.trim());
+});
+
 document.getElementById('editBtn').addEventListener('click', async () => {
   const code = editCodeInput.value.trim();
   const destino = document.getElementById('editDestino').value.trim();
+  const label = editLabelInput.value.trim();
   const editToken = editTokenInput.value.trim();
 
   editStatus.textContent = '';
@@ -1055,21 +1123,22 @@ document.getElementById('editBtn').addEventListener('click', async () => {
     const resp = await fetch('/api/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, destino, editToken }),
+      body: JSON.stringify({ code, destino, label, editToken }),
     });
     const data = await resp.json();
 
     if (resp.ok) {
-      editStatus.textContent = 'Destino atualizado! O QR já impresso passa a redirecionar pro novo link.';
+      editStatus.textContent = 'Atualizado! O QR já impresso passa a redirecionar pro novo destino.';
       editStatus.classList.add('ok');
-      editCurrent.textContent = `Destino atual: ${destino}`;
+      editCurrent.textContent = `Atual: ${label ? label + ' — ' : ''}${destino}`;
       editCurrent.classList.add('show');
+      syncHistoryAfterEdit(code, destino, label, data.updatedAt);
     } else {
       editStatus.textContent = data.error || 'Não foi possível atualizar.';
       editStatus.classList.add('err');
     }
   } catch (e) {
-    editStatus.textContent = 'Erro de conexão. Isso só funciona no site já publicado no Netlify.';
+    editStatus.textContent = 'Erro de conexão. Confira se o site está publicado e o banco de dados está conectado.';
     editStatus.classList.add('err');
   }
 
@@ -1085,6 +1154,7 @@ document.getElementById('editBtn').addEventListener('click', async () => {
   if (code && token) {
     editCodeInput.value = code;
     editTokenInput.value = token;
+    prefillFromLookup(code);
     setTimeout(() => {
       document.querySelector('.edit-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 300);
