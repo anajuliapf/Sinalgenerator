@@ -1,58 +1,64 @@
-# Sinal — versão Vercel (com QR dinâmico)
+# Sinal
 
-Mesma ferramenta de sempre: 4 tipos de QR (Link, Pix, WhatsApp, Instagram),
-exportação em PNG/SVG/PDF, e QR dinâmico editável por link secreto — sem
-cadastro, sem senha fixa.
+Gerador de QR codes para Link, Pix, WhatsApp e Instagram — com QR dinâmico
+(editável depois de impresso), sem cadastro e sem senha.
 
-A única mudança é onde ela roda: em vez de Netlify + Netlify Blobs, agora é
-**Vercel + Upstash Redis** (outro banco de dados leve e gratuito).
+🔗https://sinalgenerator-vercel.vercel.app/
 
-## Passo a passo completo
+## O problema
 
-### 1. Subir pro GitHub
-Cria um repositório novo (ex: `sinal-vercel`) e sobe todos os arquivos desta
-pasta: `index.html`, `favicon.svg`, `vercel.json`, `package.json`, e a pasta
-`api/` inteira (com os 4 arquivos dentro: `create.js`, `update.js`,
-`redirect.js`, `lookup.js`).
+Precisei gerar um QR code pra divulgar um evento, e toda ferramenta que
+encontrei tinha o mesmo padrão: pedia login, cobrava depois de um tempo, ou
+o QR simplesmente expirava. E nenhuma delas resolvia o problema mais óbvio —
+se o link mudasse depois de impresso, o QR inteiro virava lixo.
 
-### 2. Conectar no Vercel
-1. Entra em [vercel.com](https://vercel.com) e faz login (dá pra usar a
-   conta do GitHub direto)
-2. Clica em **Add New > Project**
-3. Escolhe o repositório que você acabou de criar
-4. Nas configurações, pode deixar tudo no padrão — não precisa mexer em
-   build command nem output directory, o Vercel detecta sozinho
-5. **Ainda não clica em Deploy** — antes, vai pro passo 3
+## O que ele faz
 
-### 3. Criar o banco de dados (Upstash Redis)
-1. Ainda na tela de configuração do projeto (ou depois, em
-   **Project Settings > Storage**), clica em **Storage** ou procura por
-   **Marketplace** no menu do projeto
-2. Procura **Upstash** e clica em **Add** / **Install**
-3. Escolhe criar um banco Redis novo (gratuito) e vincula ao seu projeto
-4. O Vercel vai configurar sozinho duas variáveis de ambiente
-   (`KV_REST_API_URL` e `KV_REST_API_TOKEN`) — não precisa copiar nada na
-   mão, é automático
+→ Criei 4 tipos de QR: link genérico, Pix (implementando o padrão BR Code do Banco Central do zero), WhatsApp (com mensagem pré-preenchida) e Instagram.
+→ Resolvi o problema do QR "que não pode mudar" com QR dinâmico: o código impresso aponta pra um redirecionamento que eu controlo, então o destino pode ser trocado depois — sem precisar reimprimir nada.
+→ Pra isso, sem virar uma dor de cabeça de conta/senha, desenhei um sistema de edição por link secreto (parecido com o "editar resposta" do Google Forms): sem login, sem cadastro, só posse de um link único gerado na hora da criação.
+→ Depois vieram as exportações: PNG pra uso rápido, e SVG/PDF desenhados como vetor de verdade (não imagem embutida), pra imprimir sem perder qualidade em qualquer tamanho — de etiqueta a banner.
+→ Sem cadastro, sem senha: O Sinal é 100% gratuito, sem cadastro, sem limite escondido, e estou disponibilizando aqui pra quem quiser usar. Se você tem um pequeno negócio, vende algum produto, ou só precisa colocar um link em algum lugar pras pessoas escanearem, ele resolve exatamente esse problema que sempre me incomodou nos geradores de QRs.
+→ Tudo isso rodando 100% grátis: frontend estático + funções serverless + banco leve, sem servidor pra manter.
 
-### 4. Publicar
-Agora sim, clica em **Deploy**. Em menos de um minuto o site está no ar,
-com um link tipo `sinal-vercel.vercel.app`.
+📈 RESULTADO Uma ferramenta funcional, no ar, publicada e testada ponta a ponta — do gerador de QR até a lógica de redirecionamento e a validação do CRC do payload do Pix.
 
-### 5. Testar
-1. Abre o link do site
-2. Gera um QR marcando **"Tornar este QR editável"**
-3. Copia o link secreto de edição e guarda em lugar seguro
-4. Escaneia o QR — deve redirecionar certo
-5. Abre o link secreto guardado, troca o destino, confirma que atualizou
-6. Escaneia o mesmo QR de novo — deve ir pro destino novo
+## Como foi construído
 
-## Diferenças da versão Netlify
+O Pix foi a parte mais interessante tecnicamente: implementei o padrão BR
+Code do Banco Central do zero — o payload EMV com todos os campos TLV
+(chave, nome, cidade, valor) e o checksum CRC16, testado byte a byte antes
+de confiar que qualquer banco reconheceria o QR gerado.
 
-- O link do QR dinâmico continua limpo: `seusite.vercel.app/r/codigo` (igual
-  ao Netlify, diferente da versão Streamlit que precisa de `?r=codigo`)
-- O banco (Upstash Redis) tem um plano grátis generoso: 256MB de
-  armazenamento e 10 mil comandos por dia — muito acima do que uma
-  ferramenta como essa costuma usar
-- Se um dia o Vercel também tiver algum problema de plataforma, os dados
-  ficam no Upstash, não no Vercel — então dá pra reconectar em outro lugar
-  sem perder nada
+O QR dinâmico foi o problema de arquitetura mais interessante: como editar
+o destino sem forçar login? A solução foi separar duas coisas — um código
+público curto (o que fica visível, dentro do QR) e um token secreto de alta
+entropia, gerado uma única vez e nunca reexibido. Só o hash do token fica no
+banco; nem uma cópia do banco vazada revelaria o token original. Posse do
+link secreto é a única forma de provar que alguém pode editar aquele QR
+específico.
+
+As exportações em SVG e PDF desenham a matriz do QR direto como formas
+vetoriais (retângulos), a partir dos mesmos dados binários que geram o PNG —
+em vez de embutir uma imagem raster dentro de um SVG ou PDF, que perderia
+nitidez em qualquer escala maior que a original.
+
+## Arquitetura
+
+- **Frontend**: HTML/CSS/JS puro, sem framework
+- **Backend**: funções serverless (Vercel Functions)
+- **Banco de dados**: Upstash Redis (armazena o código → destino → hash do
+  token de edição)
+- **Geração de QR**: matriz própria, renderizada em três formatos (raster
+  pro PNG, vetor pro SVG e PDF)
+
+Tudo rodando de graça, sem servidor fixo pra manter.
+
+## Sobre a versão que você está vendo
+
+Esse projeto já passou por duas hospedagens diferentes durante o
+desenvolvimento (começou no Netlify, migrou pra Vercel), e por decisões de
+design que mudaram no meio do caminho — inclusive o próprio modelo de
+autenticação, que passou por três abordagens diferentes até chegar no link
+secreto sem cadastro. Documentei isso porque o processo de errar o modelo
+duas vezes antes de achar o certo fez parte real da construção.
