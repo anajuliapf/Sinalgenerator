@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  const { code, destino, editToken } = body || {};
+  const { code, destino, label, editToken } = body || {};
 
   if (!code || !destino || !editToken) {
     return res.status(400).json({ error: 'Faltam campos obrigatórios.' });
@@ -50,6 +50,9 @@ module.exports = async (req, res) => {
   }
 
   data.destino = destino;
+  if (label !== undefined && label !== null && label.trim() !== '') {
+    data.label = label.trim();
+  }
   data.updatedAt = new Date().toISOString();
   await redis.set(code, JSON.stringify(data));
 
