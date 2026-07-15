@@ -22,6 +22,11 @@ module.exports = async (req, res) => {
   }
 
   const data = parseRecord(raw);
-  res.writeHead(302, { Location: data.destino });
+  res.writeHead(302, {
+    Location: data.destino,
+    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+  });
   res.end();
 };
